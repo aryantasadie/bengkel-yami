@@ -38,7 +38,28 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
         ]);
         
-        // Catatan: Karyawan, Customer, Jasa, Sparepart, Logistik 
+        // Akun Karyawan / Mekanik (Contoh)
+        $mekanik = \App\Models\Karyawan::create([
+            'nama' => 'Mekanik Contoh',
+            'tanggal_lahir' => '1995-05-15',
+            'alamat' => 'Jl. Bengkel Yami No. 123',
+            'tanggal_masuk' => now()->toDateString(),
+            'jabatan' => 'Mekanik Senior',
+            'gaji_pokok' => 3000000,
+            'tunjangan' => 500000,
+            'is_active' => true,
+        ]);
+
+        User::create([
+            'karyawan_id' => $mekanik->id,
+            'username' => 'coba',
+            'password' => Hash::make('password'),
+            'nama' => $mekanik->nama,
+            'role' => UserRole::KARYAWAN,
+            'is_active' => true,
+        ]);
+        
+        // Catatan: Customer, Jasa, Sparepart, Logistik 
         // harus diinput secara manual melalui sistem setelah login.
     }
 }
