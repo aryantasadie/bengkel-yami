@@ -60,8 +60,15 @@ Route::prefix('admin')
         Route::resource('karyawan', KaryawanController::class);
         Route::post('karyawan/{id}/absensi/update', [KaryawanController::class, 'updateAbsensi'])->name('karyawan.absensi.update');
 
+        // Kategori Jasa
+        Route::resource('kategori_jasa', \App\Http\Controllers\Admin\KategoriJasaController::class)->except(['show']);
+
         // Jasa
         Route::resource('jasa', JasaController::class);
+
+        // Pengaturan Nota
+        Route::get('pengaturan_nota', [\App\Http\Controllers\Admin\PengaturanNotaController::class, 'edit'])->name('pengaturan_nota.edit');
+        Route::put('pengaturan_nota', [\App\Http\Controllers\Admin\PengaturanNotaController::class, 'update'])->name('pengaturan_nota.update');
 
         // Sparepart
         Route::resource('sparepart', SparepartController::class);
@@ -74,6 +81,7 @@ Route::prefix('admin')
 
         // Pesanan
         Route::resource('pesanan', PesananController::class);
+        Route::get('pesanan/{id}/print', [PesananController::class, 'printEstimasi'])->name('pesanan.print');
         Route::put('pesanan/{id}/status', [PesananController::class, 'updateStatus'])->name('pesanan.updateStatus');
         Route::put('pesanan/jasa-karyawan/{id}/status', [PesananController::class, 'updateJasaKaryawanStatus'])->name('pesanan.updateJasaKaryawanStatus');
 
@@ -117,6 +125,7 @@ Route::prefix('owner')
 
         // Laba Rugi
         Route::get('laba-rugi', [LabaRugiController::class, 'index'])->name('laba-rugi.index');
+        Route::get('laporan/pendapatan-kategori', [\App\Http\Controllers\Owner\LaporanPendapatanController::class, 'index'])->name('laporan.pendapatan_kategori');
 
         // Manajemen Pengguna (Admin & Owner)
         Route::resource('users', \App\Http\Controllers\Owner\UserController::class)->except(['show', 'destroy']);

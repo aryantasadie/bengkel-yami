@@ -14,6 +14,7 @@ class PesananSparepart extends Model
     protected $fillable = [
         'pesanan_id',
         'sparepart_id',
+        'nama_snapshot',
         'qty',
         'harga_beli_snapshot',
         'harga_snapshot',

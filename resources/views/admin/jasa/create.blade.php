@@ -11,6 +11,15 @@
                 <input type="text" name="nama_jasa" class="form-input" required>
             </div>
             <div class="form-group">
+                <label class="form-label">Kategori</label>
+                <select name="kategori_jasa_id" class="form-select">
+                    <option value="">-- Pilih Kategori (Opsional) --</option>
+                    @foreach($kategoris as $kategori)
+                        <option value="{{ $kategori->id }}">{{ $kategori->nama_kategori }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Harga <span class="required">*</span></label>
                 <input type="number" name="harga" class="form-input" required>
             </div>

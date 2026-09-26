@@ -35,17 +35,16 @@ class JasaController extends Controller
     public function create()
     {
         $spareparts = Sparepart::all();
+        $kategoris = \App\Models\KategoriJasa::all();
 
-        return view('admin.jasa.create', compact('spareparts'));
+        return view('admin.jasa.create', compact('spareparts', 'kategoris'));
     }
 
-    /**
-     * Simpan jasa baru + Bill of Materials (pivot sparepart).
-     */
     public function store(Request $request)
     {
         $request->validate([
             'nama_jasa'   => 'required|string|max:255',
+            'kategori_jasa_id' => 'nullable|exists:kategori_jasa,id',
             'harga'       => 'required|numeric|min:0',
             'deskripsi'   => 'nullable|string|max:1000',
             'spareparts'          => 'nullable|array',
@@ -58,6 +57,7 @@ class JasaController extends Controller
 
         $jasa = Jasa::create([
             'nama_jasa' => $request->nama_jasa,
+            'kategori_jasa_id' => $request->kategori_jasa_id,
             'harga'     => $request->harga,
             'deskripsi' => $request->deskripsi,
             'is_active' => true,
@@ -76,36 +76,28 @@ class JasaController extends Controller
             ->with('success', 'Jasa berhasil ditambahkan.');
     }
 
-    /**
-     * Tampilkan detail jasa.
-     */
     public function show($id)
     {
-        $jasa = Jasa::with('spareparts')->findOrFail($id);
-
+        $jasa = Jasa::with(['spareparts', 'kategori'])->findOrFail($id);
         return view('admin.jasa.show', compact('jasa'));
     }
 
-    /**
-     * Tampilkan form edit jasa.
-     */
     public function edit($id)
     {
         $jasa = Jasa::with('spareparts')->findOrFail($id);
         $spareparts = Sparepart::all();
+        $kategoris = \App\Models\KategoriJasa::all();
 
-        return view('admin.jasa.edit', compact('jasa', 'spareparts'));
+        return view('admin.jasa.edit', compact('jasa', 'spareparts', 'kategoris'));
     }
 
-    /**
-     * Update data jasa + sync sparepart.
-     */
     public function update(Request $request, $id)
     {
         $jasa = Jasa::findOrFail($id);
 
         $request->validate([
             'nama_jasa'   => 'required|string|max:255',
+            'kategori_jasa_id' => 'nullable|exists:kategori_jasa,id',
             'harga'       => 'required|numeric|min:0',
             'deskripsi'   => 'nullable|string|max:1000',
             'spareparts'          => 'nullable|array',
@@ -118,6 +110,7 @@ class JasaController extends Controller
 
         $jasa->update([
             'nama_jasa' => $request->nama_jasa,
+            'kategori_jasa_id' => $request->kategori_jasa_id,
             'harga'     => $request->harga,
             'deskripsi' => $request->deskripsi,
         ]);

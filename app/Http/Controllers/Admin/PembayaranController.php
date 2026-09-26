@@ -67,7 +67,7 @@ class PembayaranController extends Controller
             'pesanan_id'     => 'required|exists:pesanan,id',
             'diskon_nominal' => 'nullable|numeric|min:0',
             'dp'             => 'nullable|numeric|min:0',
-            'metode_bayar'   => 'required|in:cash,transfer,debit',
+            'metode_bayar'   => 'required|string|max:50',
         ], [
             'pesanan_id.required'   => 'Pesanan wajib dipilih.',
             'metode_bayar.required' => 'Metode pembayaran wajib dipilih.',
@@ -180,8 +180,16 @@ class PembayaranController extends Controller
         $transaksi = Transaksi::with([
             'pesanan.customer',
             'pesanan.pesananJasa.jasa',
+            'pesanan.pesananSparepart.sparepart',
         ])->findOrFail($id);
 
-        return view('admin.pembayaran.print', compact('transaksi'));
+        $settings = [
+            'nama_bengkel' => \App\Models\PengaturanNota::get('nama_bengkel', 'Bengkel Yami'),
+            'alamat_bengkel' => \App\Models\PengaturanNota::get('alamat_bengkel', 'Jl. Contoh No. 123'),
+            'no_telp_bengkel' => \App\Models\PengaturanNota::get('no_telp_bengkel', '08123456789'),
+            'catatan_kaki' => \App\Models\PengaturanNota::get('catatan_kaki', 'Terima kasih atas kunjungan Anda.'),
+        ];
+
+        return view('admin.pembayaran.print', compact('transaksi', 'settings'));
     }
 }

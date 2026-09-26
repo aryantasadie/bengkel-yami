@@ -13,10 +13,16 @@ class Jasa extends Model
 
     protected $fillable = [
         'nama_jasa',
+        'kategori_jasa_id',
         'harga',
         'deskripsi',
         'is_active',
     ];
+
+    public function kategori()
+    {
+        return $this->belongsTo(KategoriJasa::class, 'kategori_jasa_id');
+    }
 
     protected $casts = [
         'harga' => 'decimal:2',

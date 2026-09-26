@@ -34,7 +34,7 @@
                 <tbody>
                     @foreach($pesanan->pesananJasa as $pj)
                     <tr>
-                        <td class="font-medium">{{ $pj->jasa->nama_jasa ?? '-' }}</td>
+                        <td class="font-medium">{{ $pj->nama_snapshot ?? $pj->jasa->nama_jasa ?? '-' }}</td>
                         <td>Rp {{ number_format($pj->harga_snapshot, 0, ',', '.') }}</td>
                         <td>{{ $pj->qty }}</td>
                         <td>Rp {{ number_format($pj->subtotal, 0, ',', '.') }}</td>
@@ -49,6 +49,33 @@
                 </tfoot>
             </table>
         </div>
+
+        {{-- Daftar Sparepart --}}
+        @if($pesanan->pesananSparepart->count() > 0)
+        <h4 style="margin-top: 2rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--neutral-200);">Daftar Sparepart</h4>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Nama Sparepart</th>
+                        <th>Harga</th>
+                        <th>Qty</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($pesanan->pesananSparepart as $ps)
+                    <tr>
+                        <td class="font-medium">{{ $ps->nama_snapshot ?? $ps->sparepart->nama ?? '-' }}</td>
+                        <td>Rp {{ number_format($ps->harga_snapshot, 0, ',', '.') }}</td>
+                        <td>{{ $ps->qty }}</td>
+                        <td>Rp {{ number_format($ps->subtotal, 0, ',', '.') }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+        @endif
 
         {{-- Form Pembayaran --}}
         <form action="{{ route('admin.pembayaran.store') }}" method="POST" style="margin-top: 2rem;">
@@ -74,11 +101,12 @@
 
             <div class="form-group">
                 <label class="form-label">Metode Pembayaran <span class="required">*</span></label>
-                <select name="metode_bayar" class="form-select" required>
-                    <option value="">-- Pilih Metode --</option>
-                    <option value="cash" {{ old('metode_bayar') == 'cash' ? 'selected' : '' }}>Cash</option>
-                    <option value="transfer" {{ old('metode_bayar') == 'transfer' ? 'selected' : '' }}>Transfer</option>
-                    <option value="debit" {{ old('metode_bayar') == 'debit' ? 'selected' : '' }}>Debit</option>
+                <select name="metode_bayar" class="form-select select2-tags" required>
+                    <option value="">-- Pilih / Ketik Metode --</option>
+                    <option value="Cash" {{ old('metode_bayar') == 'Cash' ? 'selected' : '' }}>Cash</option>
+                    <option value="Transfer" {{ old('metode_bayar') == 'Transfer' ? 'selected' : '' }}>Transfer</option>
+                    <option value="Debit" {{ old('metode_bayar') == 'Debit' ? 'selected' : '' }}>Debit</option>
+                    <option value="QRIS" {{ old('metode_bayar') == 'QRIS' ? 'selected' : '' }}>QRIS</option>
                 </select>
                 @error('metode_bayar') <span class="text-danger text-sm">{{ $message }}</span> @enderror
             </div>
@@ -136,5 +164,18 @@
 
     // Initial calculation
     document.addEventListener('DOMContentLoaded', updateSummary);
+</script>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('.select2-tags').select2({
+            tags: true,
+            placeholder: "-- Pilih / Ketik Metode --",
+            allowClear: true
+        });
+    });
 </script>
 @endsection

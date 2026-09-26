@@ -14,6 +14,7 @@ class PesananJasa extends Model
     protected $fillable = [
         'pesanan_id',
         'jasa_id',
+        'nama_snapshot',
         'harga_snapshot',
         'qty',
         'subtotal',

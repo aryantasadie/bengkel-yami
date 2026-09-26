@@ -80,13 +80,13 @@ Gunakan akun berikut untuk masuk ke dalam sistem:
 
 **1. Akun Admin (Kasir/CS)**
 * Username: `admin`
-* Password: `password`
+* Password: `admin123`
 
 **2. Akun Owner (Pemilik)**
 * Username: `owner`
-* Password: `password`
+* Password: `owner123`
 
-*(Catatan: Jika login menggunakan NIK, silakan cek tabel `karyawan` dan `users` di database untuk melihat daftar NIK yang digenerate oleh Seeder).*
+*(Catatan: Akun karyawan/mekanik default belum tersedia dan dapat dibuat oleh Owner atau Admin di menu Master Data).*
 
 ---
 *Dibuat untuk memenuhi Tugas Laporan Proyek Bengkel Yami.*

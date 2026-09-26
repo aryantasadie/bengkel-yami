@@ -2,10 +2,12 @@
 @section('title', 'Detail Pesanan')
 @section('content')
 <div class="card" style="max-width: 900px;">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <h3>Detail Pesanan: {{ $pesanan->no_pesanan }}</h3>
-        <div>
-            <a href="{{ route('admin.pesanan.index') }}" class="btn btn-outline" style="margin-right: 0.5rem;">Kembali</a>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="{{ route('admin.pesanan.index') }}" class="btn btn-outline">Kembali</a>
+            <a href="{{ route('admin.pesanan.print', ['id' => $pesanan->id, 'with_diskon' => 0]) }}" class="btn btn-outline" target="_blank">Cetak Estimasi (Normal)</a>
+            <a href="{{ route('admin.pesanan.print', ['id' => $pesanan->id, 'with_diskon' => 1]) }}" class="btn btn-outline" target="_blank">Cetak Estimasi (Diskon)</a>
             @if(in_array($pesanan->status, ['antrian', 'proses']))
                 <a href="{{ route('admin.pesanan.edit', $pesanan->id) }}" class="btn btn-primary">Edit Sparepart</a>
             @endif
@@ -95,7 +97,7 @@
                     @forelse($pesanan->pesananJasa as $pj)
                     @php $totalJasa += $pj->subtotal; @endphp
                     <tr>
-                        <td class="font-medium">{{ $pj->jasa->nama_jasa ?? '-' }}</td>
+                        <td class="font-medium">{{ $pj->nama_snapshot ?? $pj->jasa->nama_jasa ?? '-' }}</td>
                         <td>Rp {{ number_format($pj->harga_snapshot, 0, ',', '.') }}</td>
                         <td>{{ $pj->qty }}</td>
                         <td>Rp {{ number_format($pj->subtotal, 0, ',', '.') }}</td>
@@ -174,7 +176,7 @@
                     @foreach($pesanan->pesananSparepart as $ps)
                     @php $totalSparepart += $ps->subtotal; @endphp
                     <tr>
-                        <td class="font-medium">{{ $ps->sparepart->nama ?? '-' }}</td>
+                        <td class="font-medium">{{ $ps->nama_snapshot ?? $ps->sparepart->nama ?? '-' }}</td>
                         <td>Rp {{ number_format($ps->harga_snapshot, 0, ',', '.') }}</td>
                         <td>{{ $ps->qty }}</td>
                         <td>Rp {{ number_format($ps->subtotal, 0, ',', '.') }}</td>
@@ -193,22 +195,43 @@
 
         {{-- Ringkasan Tagihan --}}
         @php
-            $subtotalSemua = $totalJasa + ($totalSparepart ?? 0);
-            $nominalDiskon = $subtotalSemua * ($pesanan->diskon_persen / 100);
-            $sisaTagihan = $subtotalSemua - $nominalDiskon - $pesanan->dp;
+            $nominalDiskonJasa = $totalJasa * ($pesanan->diskon_persen / 100);
+            $nominalDiskonSparepart = ($totalSparepart ?? 0) * ($pesanan->diskon_sparepart_persen / 100);
+            $subtotalJasa = $totalJasa - $nominalDiskonJasa;
+            $subtotalSparepart = ($totalSparepart ?? 0) - $nominalDiskonSparepart;
+            $subtotalSemua = $subtotalJasa + $subtotalSparepart;
+            $sisaTagihan = $subtotalSemua - $pesanan->dp;
         @endphp
         <div style="margin-top: 2rem; background: var(--neutral-50); border: 1px solid var(--neutral-200); border-radius: 8px; padding: 1.5rem; max-width: 500px; margin-left: auto;">
             <h4 style="margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--neutral-200); padding-bottom: 0.5rem; text-align: right;">Ringkasan Tagihan</h4>
+            
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                <span class="text-muted">Subtotal Jasa & Sparepart:</span>
-                <span class="font-medium">Rp {{ number_format($subtotalSemua, 0, ',', '.') }}</span>
+                <span class="text-muted">Total Jasa:</span>
+                <span class="font-medium">Rp {{ number_format($totalJasa, 0, ',', '.') }}</span>
             </div>
             @if($pesanan->diskon_persen > 0)
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                <span class="text-muted">Diskon ({{ $pesanan->diskon_persen }}%):</span>
-                <span class="font-medium text-danger">- Rp {{ number_format($nominalDiskon, 0, ',', '.') }}</span>
+                <span class="text-muted">Diskon Jasa ({{ $pesanan->diskon_persen }}%):</span>
+                <span class="font-medium text-danger">- Rp {{ number_format($nominalDiskonJasa, 0, ',', '.') }}</span>
             </div>
             @endif
+
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span class="text-muted">Total Sparepart:</span>
+                <span class="font-medium">Rp {{ number_format($totalSparepart ?? 0, 0, ',', '.') }}</span>
+            </div>
+            @if($pesanan->diskon_sparepart_persen > 0)
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span class="text-muted">Diskon Sparepart ({{ $pesanan->diskon_sparepart_persen }}%):</span>
+                <span class="font-medium text-danger">- Rp {{ number_format($nominalDiskonSparepart, 0, ',', '.') }}</span>
+            </div>
+            @endif
+
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--neutral-200);">
+                <span class="font-bold">Subtotal Keseluruhan:</span>
+                <span class="font-bold">Rp {{ number_format($subtotalSemua, 0, ',', '.') }}</span>
+            </div>
+
             @if($pesanan->dp > 0)
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
                 <span class="text-muted">Uang Muka (DP):</span>

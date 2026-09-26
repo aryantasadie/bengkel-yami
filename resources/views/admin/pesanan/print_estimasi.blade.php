@@ -1,25 +1,22 @@
 @php
-    $pesanan = $transaksi->pesanan;
     $totalJasa = $pesanan->pesananJasa->sum('subtotal');
     $totalSparepart = $pesanan->pesananSparepart->sum('subtotal');
     
-    // We recalculate nominal diskon based on pesanan percentages just for display structure,
-    // or we can use $transaksi->diskon_nominal if we want simple total diskon.
-    // To match the estimasi split, we calculate it:
-    $nominalDiskonJasa = $totalJasa * ($pesanan->diskon_persen / 100);
-    $nominalDiskonSparepart = $totalSparepart * ($pesanan->diskon_sparepart_persen / 100);
+    $nominalDiskonJasa = $withDiskon ? ($totalJasa * ($pesanan->diskon_persen / 100)) : 0;
+    $nominalDiskonSparepart = $withDiskon ? ($totalSparepart * ($pesanan->diskon_sparepart_persen / 100)) : 0;
     
     $subtotalJasa = $totalJasa - $nominalDiskonJasa;
     $subtotalSparepart = $totalSparepart - $nominalDiskonSparepart;
     
     $totalKeseluruhan = $subtotalJasa + $subtotalSparepart;
+    $sisaTagihan = max(0, $totalKeseluruhan - $pesanan->dp);
 @endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nota - {{ $transaksi->no_nota }}</title>
+    <title>Estimasi - {{ $pesanan->no_pesanan }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Courier New', monospace; font-size: 12px; padding: 20px; max-width: 400px; margin: 0 auto; }
@@ -45,7 +42,7 @@
 </head>
 <body>
     <div class="no-print" style="text-align: center; margin-bottom: 20px;">
-        <button onclick="window.print()" style="padding: 8px 24px; font-size: 14px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">Cetak Nota</button>
+        <button onclick="window.print()" style="padding: 8px 24px; font-size: 14px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px;">Cetak Estimasi</button>
         <button onclick="window.close()" style="padding: 8px 24px; font-size: 14px; cursor: pointer; margin-left: 8px; border: 1px solid #ccc; border-radius: 4px;">Tutup</button>
     </div>
 
@@ -55,17 +52,15 @@
         <p>Telp: {{ $settings['no_telp_bengkel'] }}</p>
     </div>
 
-    <div class="info-row">
-        <span class="label">No Nota:</span>
-        <span>{{ $transaksi->no_nota }}</span>
-    </div>
+    <div style="text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 14px;">ESTIMASI BIAYA</div>
+
     <div class="info-row">
         <span class="label">Tanggal Cetak:</span>
         <span>{{ now()->format('d/m/Y H:i') }}</span>
     </div>
     <div class="info-row">
         <span class="label">Customer:</span>
-        <span>{{ $transaksi->pesanan->customer->nama ?? '-' }}</span>
+        <span>{{ $pesanan->customer->nama ?? '-' }}</span>
     </div>
 
     <div class="divider"></div>
@@ -74,7 +69,7 @@
     <div class="items">
         <table>
             <tbody>
-                @foreach($transaksi->pesanan->pesananJasa as $pj)
+                @foreach($pesanan->pesananJasa as $pj)
                 <tr>
                     <td>{{ $pj->nama_snapshot ?? $pj->jasa->nama_jasa ?? '-' }} (x{{ $pj->qty }})</td>
                     <td>Rp{{ number_format($pj->subtotal, 0, ',', '.') }}</td>
@@ -85,7 +80,7 @@
         @if($totalJasa > 0)
         <div style="text-align: right; margin-top: 4px; padding-top: 4px; border-top: 1px dotted #ccc;">
             Total Jasa: Rp{{ number_format($totalJasa, 0, ',', '.') }}
-            @if($pesanan->diskon_persen > 0)
+            @if($withDiskon && $pesanan->diskon_persen > 0)
             <br><small>Diskon ({{ $pesanan->diskon_persen }}%): -Rp{{ number_format($nominalDiskonJasa, 0, ',', '.') }}</small>
             <br><strong>Sub Jasa: Rp{{ number_format($subtotalJasa, 0, ',', '.') }}</strong>
             @endif
@@ -95,12 +90,12 @@
 
     <div class="divider"></div>
 
-    @if($transaksi->pesanan->pesananSparepart->count() > 0)
+    @if($pesanan->pesananSparepart->count() > 0)
     <div style="font-weight: bold; font-size: 11px;">SPAREPART</div>
     <div class="items">
         <table>
             <tbody>
-                @foreach($transaksi->pesanan->pesananSparepart as $ps)
+                @foreach($pesanan->pesananSparepart as $ps)
                 <tr>
                     <td>{{ $ps->nama_snapshot ?? $ps->sparepart->nama ?? '-' }} (x{{ $ps->qty }})</td>
                     <td>Rp{{ number_format($ps->subtotal, 0, ',', '.') }}</td>
@@ -111,7 +106,7 @@
         @if($totalSparepart > 0)
         <div style="text-align: right; margin-top: 4px; padding-top: 4px; border-top: 1px dotted #ccc;">
             Total Sparepart: Rp{{ number_format($totalSparepart, 0, ',', '.') }}
-            @if($pesanan->diskon_sparepart_persen > 0)
+            @if($withDiskon && $pesanan->diskon_sparepart_persen > 0)
             <br><small>Diskon ({{ $pesanan->diskon_sparepart_persen }}%): -Rp{{ number_format($nominalDiskonSparepart, 0, ',', '.') }}</small>
             <br><strong>Sub Sparepart: Rp{{ number_format($subtotalSparepart, 0, ',', '.') }}</strong>
             @endif
@@ -123,23 +118,19 @@
 
     <div class="total-section">
         <div class="total-row grand">
-            <span>TOTAL BAYAR</span>
-            <span>Rp {{ number_format($transaksi->total_bayar, 0, ',', '.') }}</span>
+            <span>TOTAL ESTIMASI</span>
+            <span>Rp {{ number_format($totalKeseluruhan, 0, ',', '.') }}</span>
         </div>
-        @if($transaksi->dp > 0)
+        @if($pesanan->dp > 0)
         <div class="total-row">
             <span>DP</span>
-            <span>Rp {{ number_format($transaksi->dp, 0, ',', '.') }}</span>
+            <span>Rp {{ number_format($pesanan->dp, 0, ',', '.') }}</span>
         </div>
         <div class="total-row">
-            <span>Sisa Bayar</span>
-            <span>Rp {{ number_format($transaksi->sisa_bayar, 0, ',', '.') }}</span>
+            <span>Sisa Tagihan</span>
+            <span>Rp {{ number_format($sisaTagihan, 0, ',', '.') }}</span>
         </div>
         @endif
-        <div class="total-row" style="margin-top: 10px; padding-top: 5px; border-top: 1px dotted #ccc;">
-            <span>Metode Bayar</span>
-            <span>{{ ucfirst($transaksi->metode_bayar) }}</span>
-        </div>
     </div>
 
     <div class="footer">

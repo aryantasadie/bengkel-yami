@@ -61,7 +61,7 @@
                 <tbody>
                     @foreach($transaksi->pesanan->pesananJasa as $pj)
                     <tr>
-                        <td class="font-medium">{{ $pj->jasa->nama_jasa ?? '-' }}</td>
+                        <td class="font-medium">{{ $pj->nama_snapshot ?? $pj->jasa->nama_jasa ?? '-' }}</td>
                         <td>Rp {{ number_format($pj->harga_snapshot, 0, ',', '.') }}</td>
                         <td>{{ $pj->qty }}</td>
                         <td>Rp {{ number_format($pj->subtotal, 0, ',', '.') }}</td>
@@ -87,7 +87,7 @@
                 <tbody>
                     @foreach($transaksi->pesanan->pesananSparepart as $ps)
                     <tr>
-                        <td class="font-medium">{{ $ps->sparepart->nama ?? '-' }}</td>
+                        <td class="font-medium">{{ $ps->nama_snapshot ?? $ps->sparepart->nama ?? '-' }}</td>
                         <td>Rp {{ number_format($ps->harga_snapshot, 0, ',', '.') }}</td>
                         <td>{{ $ps->qty }}</td>
                         <td>Rp {{ number_format($ps->subtotal, 0, ',', '.') }}</td>
@@ -99,19 +99,38 @@
         @endif
 
         {{-- Ringkasan Pembayaran --}}
+        @php
+            $pesanan = $transaksi->pesanan;
+            $totalJasa = $pesanan->pesananJasa->sum('subtotal');
+            $totalSparepart = $pesanan->pesananSparepart->sum('subtotal');
+            $nominalDiskonJasa = $totalJasa * ($pesanan->diskon_persen / 100);
+            $nominalDiskonSparepart = $totalSparepart * ($pesanan->diskon_sparepart_persen / 100);
+        @endphp
         <div style="background: var(--neutral-50); border-radius: 8px; padding: 1.5rem; margin-top: 1.5rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                <span class="text-muted">Total Harga</span>
-                <span>Rp {{ number_format($transaksi->total_harga, 0, ',', '.') }}</span>
+                <span class="text-muted">Total Jasa</span>
+                <span>Rp {{ number_format($totalJasa, 0, ',', '.') }}</span>
             </div>
-            @if($transaksi->diskon_nominal > 0)
+            @if($pesanan->diskon_persen > 0)
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                <span class="text-muted">Diskon</span>
-                <span class="text-danger">- Rp {{ number_format($transaksi->diskon_nominal, 0, ',', '.') }}</span>
+                <span class="text-muted">Diskon Jasa ({{ $pesanan->diskon_persen }}%)</span>
+                <span class="text-danger">- Rp {{ number_format($nominalDiskonJasa, 0, ',', '.') }}</span>
             </div>
             @endif
+
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span class="text-muted">Total Sparepart</span>
+                <span>Rp {{ number_format($totalSparepart, 0, ',', '.') }}</span>
+            </div>
+            @if($pesanan->diskon_sparepart_persen > 0)
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span class="text-muted">Diskon Sparepart ({{ $pesanan->diskon_sparepart_persen }}%)</span>
+                <span class="text-danger">- Rp {{ number_format($nominalDiskonSparepart, 0, ',', '.') }}</span>
+            </div>
+            @endif
+
             <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--neutral-200);">
-                <span class="font-medium">Total Bayar</span>
+                <span class="font-medium">Total Bayar (Subtotal Keseluruhan)</span>
                 <span class="font-medium">Rp {{ number_format($transaksi->total_bayar, 0, ',', '.') }}</span>
             </div>
             @if($transaksi->dp > 0)

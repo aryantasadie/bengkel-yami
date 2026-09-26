@@ -58,7 +58,7 @@ class PesananController extends Controller
             }])
             ->get();
 
-        $spareparts = \App\Models\Sparepart::where('stok', '>', 0)->get();
+        $spareparts = \App\Models\Sparepart::all();
 
         return view('admin.pesanan.create', compact('customers', 'jasas', 'karyawans', 'spareparts'));
     }
@@ -76,26 +76,20 @@ class PesananController extends Controller
             'dp'                        => 'nullable|numeric|min:0',
             'jasas'                     => 'required|array|min:1',
             'jasas.*.jasa_id'           => 'required|exists:jasa,id',
-            'jasas.*.karyawan_id'       => 'required|exists:karyawan,id',
+            'jasas.*.karyawan_id'       => 'nullable|exists:karyawan,id',
+            'jasas.*.nama_custom'       => 'nullable|string|max:100',
+            'jasas.*.harga_custom'      => 'nullable|numeric|min:0',
             'spareparts'                => 'nullable|array',
             'spareparts.*.sparepart_id' => 'required_with:spareparts|exists:sparepart,id',
             'spareparts.*.qty'          => 'required_with:spareparts|integer|min:1',
+            'spareparts.*.nama_custom'  => 'nullable|string|max:100',
+            'spareparts.*.harga_custom' => 'nullable|numeric|min:0',
         ], [
             'customer_id.required'            => 'Customer wajib dipilih.',
             'deskripsi_pekerjaan.required'    => 'Deskripsi pekerjaan wajib diisi.',
             'jasas.required'                  => 'Minimal pilih satu jasa.',
             'jasas.min'                       => 'Minimal pilih satu jasa.',
         ]);
-
-        // Validasi Stok Sparepart
-        if ($request->has('spareparts')) {
-            foreach ($request->spareparts as $spItem) {
-                $sparepart = \App\Models\Sparepart::findOrFail($spItem['sparepart_id']);
-                if ($spItem['qty'] > $sparepart->stok) {
-                    return back()->with('error', "Stok {$sparepart->nama} tidak mencukupi. Sisa stok gudang: {$sparepart->stok}")->withInput();
-                }
-            }
-        }
 
         DB::beginTransaction();
         try {
@@ -116,43 +110,48 @@ class PesananController extends Controller
 
             // 2. Create pesanan
             $pesanan = Pesanan::create([
-                'no_pesanan'          => $noPesanan,
-                'customer_id'         => $request->customer_id,
-                'tanggal_masuk'       => Carbon::now(),
-                'deskripsi_pekerjaan' => $request->deskripsi_pekerjaan,
-                'catatan'             => $request->catatan,
-                'diskon_persen'       => $request->diskon_persen ?? 0,
-                'dp'                  => $request->dp ?? 0,
-                'status'              => 'antrian',
+                'no_pesanan'              => $noPesanan,
+                'customer_id'             => $request->customer_id,
+                'tanggal_masuk'           => Carbon::now(),
+                'deskripsi_pekerjaan'     => $request->deskripsi_pekerjaan,
+                'catatan'                 => $request->catatan,
+                'diskon_persen'           => $request->diskon_persen ?? 0,
+                'diskon_sparepart_persen' => $request->diskon_sparepart_persen ?? 0,
+                'dp'                      => $request->dp ?? 0,
+                'status'                  => 'antrian',
             ]);
 
             // 3. Create pesanan_jasa entries + jasa_karyawan assignments
             foreach ($request->jasas as $jasaItem) {
                 $jasa = Jasa::findOrFail($jasaItem['jasa_id']);
+                
+                $namaSnapshot = !empty($jasaItem['nama_custom']) ? $jasaItem['nama_custom'] : null;
+                $hargaSnapshot = isset($jasaItem['harga_custom']) ? $jasaItem['harga_custom'] : $jasa->harga;
 
                 // Snapshot harga saat ini
                 $pesananJasa = PesananJasa::create([
                     'pesanan_id'     => $pesanan->id,
                     'jasa_id'        => $jasa->id,
-                    'harga_snapshot' => $jasa->harga,
+                    'nama_snapshot'  => $namaSnapshot,
+                    'harga_snapshot' => $hargaSnapshot,
                     'qty'            => 1,
-                    'subtotal'       => $jasa->harga,
+                    'subtotal'       => $hargaSnapshot,
                 ]);
 
-                // 4. Create jasa_karyawan assignment
-                JasaKaryawan::create([
-                    'pesanan_jasa_id' => $pesananJasa->id,
-                    'karyawan_id'     => $jasaItem['karyawan_id'],
-                    'status'          => 'ditugaskan',
-                ]);
+                // 4. Create jasa_karyawan assignment (if any)
+                if (!empty($jasaItem['karyawan_id'])) {
+                    JasaKaryawan::create([
+                        'pesanan_jasa_id' => $pesananJasa->id,
+                        'karyawan_id'     => $jasaItem['karyawan_id'],
+                        'status'          => 'ditugaskan',
+                    ]);
+                }
             }
 
-            // 5. Create pesanan_sparepart entries if any
             if ($request->has('spareparts')) {
                 foreach ($request->spareparts as $spItem) {
                     $sparepart = \App\Models\Sparepart::findOrFail($spItem['sparepart_id']);
                     
-                    // FIFO Logic
                     $qtyDibutuhkan = $spItem['qty'];
                     $totalHargaBeli = 0;
                     $sisaKebutuhan = $qtyDibutuhkan;
@@ -174,24 +173,25 @@ class PesananController extends Controller
                         DB::table('sparepart_batches')->where('id', $batch->id)->decrement('qty_sisa', $qtyAmbil);
                     }
 
-                    // Fallback untuk 'Stok Hantu' (Stok ada tapi batch kosong karena bug lama)
                     if ($sisaKebutuhan > 0) {
                         $totalHargaBeli += ($sisaKebutuhan * $sparepart->getRawOriginal('harga_beli'));
                     }
 
-                    // Weighted average for harga_beli_snapshot
                     $avgHargaBeli = $qtyDibutuhkan > 0 ? ($totalHargaBeli / $qtyDibutuhkan) : 0;
+                    
+                    $namaSnapshot = !empty($spItem['nama_custom']) ? $spItem['nama_custom'] : null;
+                    $hargaSnapshot = isset($spItem['harga_custom']) ? $spItem['harga_custom'] : $sparepart->harga_jual;
                     
                     \App\Models\PesananSparepart::create([
                         'pesanan_id'          => $pesanan->id,
                         'sparepart_id'        => $sparepart->id,
+                        'nama_snapshot'       => $namaSnapshot,
                         'qty'                 => $spItem['qty'],
                         'harga_beli_snapshot' => $avgHargaBeli,
-                        'harga_snapshot'      => $sparepart->harga_jual,
-                        'subtotal'            => $sparepart->harga_jual * $spItem['qty'],
+                        'harga_snapshot'      => $hargaSnapshot,
+                        'subtotal'            => $hargaSnapshot * $spItem['qty'],
                     ]);
                     
-                    // Kurangi stok gudang langsung
                     $sparepart->decrement('stok', $spItem['qty']);
                 }
             }
@@ -230,9 +230,7 @@ class PesananController extends Controller
             ->get();
 
         $existingSpIds = $pesanan->pesananSparepart->pluck('sparepart_id')->toArray();
-        $spareparts = \App\Models\Sparepart::where('stok', '>', 0)
-            ->orWhereIn('id', $existingSpIds)
-            ->get();
+        $spareparts = \App\Models\Sparepart::all();
 
         return view('admin.pesanan.edit', compact('pesanan', 'spareparts', 'jasas', 'karyawans'));
     }
@@ -251,35 +249,30 @@ class PesananController extends Controller
         $request->validate([
             'jasas'                     => 'required|array|min:1',
             'jasas.*.jasa_id'           => 'required|exists:jasa,id',
-            'jasas.*.karyawan_id'       => 'required|exists:karyawan,id',
+            'jasas.*.karyawan_id'       => 'nullable|exists:karyawan,id',
+            'jasas.*.nama_custom'       => 'nullable|string|max:100',
+            'jasas.*.harga_custom'      => 'nullable|numeric|min:0',
             'spareparts'                => 'nullable|array',
             'spareparts.*.sparepart_id' => 'required_with:spareparts|exists:sparepart,id',
             'spareparts.*.qty'          => 'required_with:spareparts|integer|min:1',
+            'spareparts.*.nama_custom'  => 'nullable|string|max:100',
+            'spareparts.*.harga_custom' => 'nullable|numeric|min:0',
+            'deskripsi_pekerjaan'       => 'required|string|max:1000',
             'catatan'                   => 'nullable|string',
             'diskon_persen'             => 'nullable|numeric|min:0|max:100',
+            'diskon_sparepart_persen'   => 'nullable|numeric|min:0|max:100',
             'dp'                        => 'nullable|numeric|min:0',
         ]);
-
-        // Validasi Stok Sparepart
-        if ($request->has('spareparts')) {
-            foreach ($request->spareparts as $spItem) {
-                $sparepart = \App\Models\Sparepart::findOrFail($spItem['sparepart_id']);
-                $existingQty = $pesanan->pesananSparepart->where('sparepart_id', $spItem['sparepart_id'])->first()->qty ?? 0;
-                $diff = $spItem['qty'] - $existingQty;
-                
-                if ($diff > 0 && $diff > $sparepart->stok) {
-                    return back()->with('error', "Stok {$sparepart->nama} tidak mencukupi untuk tambahan tersebut. Sisa stok gudang: {$sparepart->stok}")->withInput();
-                }
-            }
-        }
 
         DB::beginTransaction();
         try {
             // Update pesanan basic fields
             $pesanan->update([
-                'catatan'       => $request->catatan,
-                'diskon_persen' => $request->diskon_persen ?? 0,
-                'dp'            => $request->dp ?? 0,
+                'deskripsi_pekerjaan' => $request->deskripsi_pekerjaan,
+                'catatan'             => $request->catatan,
+                'diskon_persen'       => $request->diskon_persen ?? 0,
+                'diskon_sparepart_persen' => $request->diskon_sparepart_persen ?? 0,
+                'dp'                  => $request->dp ?? 0,
             ]);
 
             // --- 1. REKONSILIASI JASA ---
@@ -294,18 +287,25 @@ class PesananController extends Controller
             foreach ($request->jasas as $jasaItem) {
                 $jasa = \App\Models\Jasa::findOrFail($jasaItem['jasa_id']);
                 
+                $namaSnapshot = !empty($jasaItem['nama_custom']) ? $jasaItem['nama_custom'] : null;
+                $hargaSnapshot = isset($jasaItem['harga_custom']) ? $jasaItem['harga_custom'] : $jasa->harga;
+                
                 $pesananJasa = \App\Models\PesananJasa::create([
                     'pesanan_id'     => $pesanan->id,
                     'jasa_id'        => $jasa->id,
-                    'harga_snapshot' => $jasa->harga,
-                    'subtotal'       => $jasa->harga,
+                    'nama_snapshot'  => $namaSnapshot,
+                    'harga_snapshot' => $hargaSnapshot,
+                    'qty'            => 1,
+                    'subtotal'       => $hargaSnapshot,
                 ]);
 
-                \App\Models\JasaKaryawan::create([
-                    'pesanan_jasa_id' => $pesananJasa->id,
-                    'karyawan_id'     => $jasaItem['karyawan_id'],
-                    'status'          => 'ditugaskan',
-                ]);
+                if (!empty($jasaItem['karyawan_id'])) {
+                    \App\Models\JasaKaryawan::create([
+                        'pesanan_jasa_id' => $pesananJasa->id,
+                        'karyawan_id'     => $jasaItem['karyawan_id'],
+                        'status'          => 'ditugaskan',
+                    ]);
+                }
             }
 
             // --- 2. REKONSILIASI SPAREPART ---
@@ -375,14 +375,18 @@ class PesananController extends Controller
                     }
 
                     $avgHargaBeli = $qtyDibutuhkan > 0 ? ($totalHargaBeli / $qtyDibutuhkan) : 0;
+                    
+                    $namaSnapshot = !empty($newItem['nama_custom']) ? $newItem['nama_custom'] : null;
+                    $hargaSnapshot = isset($newItem['harga_custom']) ? $newItem['harga_custom'] : $sparepart->harga_jual;
 
                     \App\Models\PesananSparepart::create([
                         'pesanan_id'          => $pesanan->id,
                         'sparepart_id'        => $sparepart->id,
+                        'nama_snapshot'       => $namaSnapshot,
                         'qty'                 => $newItem['qty'],
                         'harga_beli_snapshot' => $avgHargaBeli,
-                        'harga_snapshot'      => $sparepart->harga_jual,
-                        'subtotal'            => $sparepart->harga_jual * $newItem['qty'],
+                        'harga_snapshot'      => $hargaSnapshot,
+                        'subtotal'            => $hargaSnapshot * $newItem['qty'],
                     ]);
                     $sparepart->decrement('stok', $newItem['qty']);
                 } else {
@@ -421,18 +425,28 @@ class PesananController extends Controller
                         $newHPP = ($oldTotalHPP + $totalHargaBeliTambahan) / $newQty;
                         
                         $sparepart->decrement('stok', $diff);
+                        
+                        $namaSnapshot = !empty($newItem['nama_custom']) ? $newItem['nama_custom'] : $oldItem->nama_snapshot;
+                        $hargaSnapshot = isset($newItem['harga_custom']) ? $newItem['harga_custom'] : $oldItem->harga_snapshot;
 
                         // Update data
                         $oldItem->update([
+                            'nama_snapshot' => $namaSnapshot,
                             'qty' => $newQty,
                             'harga_beli_snapshot' => $newHPP,
-                            'subtotal' => $oldItem->harga_snapshot * $newQty,
+                            'harga_snapshot' => $hargaSnapshot,
+                            'subtotal' => $hargaSnapshot * $newQty,
                         ]);
                     } else if ($newQty <= $oldItem->qty) {
-                        // Jika berkurang atau tetap, kita update qty dan subtotal (HPP snapshot per item tetap sama)
+                        // Jika berkurang atau tetap, kita update qty dan subtotal
+                        $namaSnapshot = !empty($newItem['nama_custom']) ? $newItem['nama_custom'] : $oldItem->nama_snapshot;
+                        $hargaSnapshot = isset($newItem['harga_custom']) ? $newItem['harga_custom'] : $oldItem->harga_snapshot;
+                        
                         $oldItem->update([
+                            'nama_snapshot' => $namaSnapshot,
                             'qty' => $newQty,
-                            'subtotal' => $oldItem->harga_snapshot * $newQty,
+                            'harga_snapshot' => $hargaSnapshot,
+                            'subtotal' => $hargaSnapshot * $newQty,
                         ]);
                     }
                 }
@@ -467,6 +481,30 @@ class PesananController extends Controller
         ])->findOrFail($id);
 
         return view('admin.pesanan.show', compact('pesanan'));
+    }
+
+    /**
+     * Cetak Estimasi Pesanan
+     */
+    public function printEstimasi(Request $request, $id)
+    {
+        $pesanan = Pesanan::with([
+            'customer', 
+            'pesananJasa.jasa', 
+            'pesananJasa.jasaKaryawan.karyawan',
+            'pesananSparepart.sparepart'
+        ])->findOrFail($id);
+
+        $withDiskon = $request->query('with_diskon', 1);
+
+        $settings = [
+            'nama_bengkel' => \App\Models\PengaturanNota::get('nama_bengkel', 'Bengkel Yami'),
+            'alamat_bengkel' => \App\Models\PengaturanNota::get('alamat_bengkel', 'Jl. Contoh No. 123'),
+            'no_telp_bengkel' => \App\Models\PengaturanNota::get('no_telp_bengkel', '08123456789'),
+            'catatan_kaki' => \App\Models\PengaturanNota::get('catatan_kaki', 'Terima kasih atas kunjungan Anda.'),
+        ];
+
+        return view('admin.pesanan.print_estimasi', compact('pesanan', 'withDiskon', 'settings'));
     }
 
     /**

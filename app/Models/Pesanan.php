@@ -21,6 +21,7 @@ class Pesanan extends Model
         'status',
         'catatan',
         'diskon_persen',
+        'diskon_sparepart_persen',
         'dp'
     ];
 

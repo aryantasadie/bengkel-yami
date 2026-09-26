@@ -12,6 +12,7 @@
                 <thead>
                     <tr>
                         <th>Nama Jasa</th>
+                        <th>Kategori</th>
                         <th>Harga</th>
                         <th>Deskripsi</th>
                         <th class="text-center">Aksi</th>
@@ -21,6 +22,7 @@
                     @forelse($jasas ?? [] as $j)
                     <tr>
                         <td class="font-medium">{{ $j->nama_jasa }}</td>
+                        <td>{{ $j->kategori->nama_kategori ?? '-' }}</td>
                         <td>Rp {{ number_format($j->harga, 0, ',', '.') }}</td>
                         <td>{{ Str::limit($j->deskripsi ?? '-', 50) }}</td>
                         <td class="text-center table-actions justify-center">
